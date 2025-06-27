@@ -2,35 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
+import Welcome from "./components/Welcome";
+import Header from "./components/Header";
+import MusicLibrary from "./components/MusicLibrary";
+import AlbumView from "./components/AlbumView";
+import { Album, SongInfo } from "./types";
 import "./App.css";
-
-interface SongInfo {
-  id?: number;
-  title: string;
-  artist: string;
-  album: string;
-  genre?: string;
-  duration: number;
-  path: string;
-  lyrics_path?: string;
-  cover_art_base64?: string;
-  album_artist?: string;
-  year?: string;
-  label?: string;
-  track_number?: string;
-}
-
-interface Album {
-  id: number;
-  title: string;
-  artist: string;
-  year?: string;
-  genre?: string;
-  cover_art_base64?: string;
-  song_count: number;
-  total_duration: number;
-  folder_path: string;
-}
 
 function App() {
   const [musicFolderPath, setMusicFolderPath] = useState<string | null>(null);
@@ -41,10 +18,8 @@ function App() {
   const [albumSongs, setAlbumSongs] = useState<SongInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<Album[]>([]);
-  const [showNotification, setShowNotification] = useState(true);
-  const [notificationMessage, setNotificationMessage] = useState(
-    "Testing this toast notification"
-  );
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
 
   const showTemporaryNotification = useCallback((message: string) => {
     setNotificationMessage(message);
@@ -56,12 +31,14 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch initial music folder path on component mount
   useEffect(() => {
     const fetchFolderPath = async () => {
       try {
         const path: string | null = await invoke("get_music_folder_path");
         setMusicFolderPath(path);
+        if (path) {
+          scanLibrary(path);
+        }
       } catch (error) {
         console.error("Failed to get music folder path:", error);
         showTemporaryNotification(`Error fetching folder path: ${error}`);
@@ -70,7 +47,6 @@ function App() {
     fetchFolderPath();
   }, [showTemporaryNotification]);
 
-  // Fetch albums when the component mounts or after a scan
   const fetchAlbums = useCallback(async () => {
     try {
       const fetchedAlbums: Album[] = await invoke("get_albums", {
@@ -84,7 +60,6 @@ function App() {
     }
   }, [showTemporaryNotification]);
 
-  // Listen for scan progress and completion events
   useEffect(() => {
     let unlistenProgress: (() => void) | undefined;
     let unlistenComplete: (() => void) | undefined;
@@ -98,20 +73,18 @@ function App() {
         setIsScanning(false);
         setScanProgress(100);
         showTemporaryNotification("Music library scan complete!");
-        await fetchAlbums(); // Refresh albums after scan
+        await fetchAlbums();
       });
     };
 
     setupListeners();
 
-    // Clean up listeners on component unmount
     return () => {
       if (unlistenProgress) unlistenProgress();
       if (unlistenComplete) unlistenComplete();
     };
   }, [showTemporaryNotification, fetchAlbums]);
 
-  // Fetch scan status on component mount and periodically
   useEffect(() => {
     const fetchScanStatus = async () => {
       try {
@@ -126,7 +99,7 @@ function App() {
     };
 
     fetchScanStatus();
-    const interval = setInterval(fetchScanStatus, 2000); // Poll every 2 seconds
+    const interval = setInterval(fetchScanStatus, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -134,7 +107,6 @@ function App() {
     fetchAlbums();
   }, [fetchAlbums]);
 
-  // Handle folder selection
   const selectMusicFolder = async () => {
     try {
       const selectedPath = await open({
@@ -146,6 +118,7 @@ function App() {
         setMusicFolderPath(selectedPath);
         await invoke("set_music_folder_path", { path: selectedPath });
         showTemporaryNotification("Music folder path saved!");
+        scanLibrary(selectedPath);
       }
     } catch (error) {
       console.error("Failed to select folder:", error);
@@ -153,16 +126,11 @@ function App() {
     }
   };
 
-  // Handle scanning the music library
-  const scanLibrary = async () => {
-    if (!musicFolderPath) {
-      showTemporaryNotification("Please select a music folder first.");
-      return;
-    }
+  const scanLibrary = async (path: string) => {
     setIsScanning(true);
     setScanProgress(0);
     try {
-      await invoke("scan_music_library", { folderPath: musicFolderPath });
+      await invoke("scan_music_library", { folderPath: path });
       showTemporaryNotification("Music library scan started!");
     } catch (error) {
       console.error("Failed to start scan:", error);
@@ -171,7 +139,6 @@ function App() {
     }
   };
 
-  // Handle rescanning the music library
   const rescanLibrary = async () => {
     if (!musicFolderPath) {
       showTemporaryNotification("No music folder path configured to rescan.");
@@ -189,7 +156,6 @@ function App() {
     }
   };
 
-  // Handle album click to view songs
   const handleAlbumClick = async (album: Album) => {
     setSelectedAlbum(album);
     try {
@@ -203,18 +169,15 @@ function App() {
     }
   };
 
-  // Handle back to album list
   const handleBackToAlbums = () => {
     setSelectedAlbum(null);
     setAlbumSongs([]);
   };
 
-  // Handle search input change
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
   };
 
-  // Perform search
   const performSearch = useCallback(async () => {
     if (searchQuery.trim() === "") {
       setSearchResults([]);
@@ -235,7 +198,7 @@ function App() {
   useEffect(() => {
     const handler = setTimeout(() => {
       performSearch();
-    }, 300); // Debounce search input
+    }, 300);
     return () => clearTimeout(handler);
   }, [searchQuery, performSearch]);
 
@@ -247,174 +210,35 @@ function App() {
 
       <h1 className="app-title">MusicThing</h1>
 
-      <div className="card">
-        <h2 className="section-title">Settings</h2>
-        <div className="settings-controls">
-          <input
-            type="text"
-            readOnly
-            value={musicFolderPath || "No music folder selected"}
-            className="folder-input"
+      {!musicFolderPath ? (
+        <Welcome onFolderSelect={selectMusicFolder} />
+      ) : (
+        <>
+          <Header 
+            musicFolderPath={musicFolderPath}
+            isScanning={isScanning}
+            scanProgress={scanProgress}
+            onSelectFolder={selectMusicFolder}
+            onScan={() => scanLibrary(musicFolderPath)}
+            onRescan={rescanLibrary}
           />
-          <button onClick={selectMusicFolder} className="btn btn-folder">
-            Select Folder
-          </button>
-          <button
-            onClick={scanLibrary}
-            disabled={isScanning || !musicFolderPath}
-            className={`btn btn-scan ${isScanning ? "disabled" : ""}`}
-          >
-            {isScanning
-              ? `Scanning... ${scanProgress.toFixed(1)}%`
-              : "Scan Library"}
-          </button>
-          <button
-            onClick={rescanLibrary}
-            disabled={isScanning || !musicFolderPath}
-            className={`btn btn-rescan ${isScanning ? "disabled" : ""}`}
-          >
-            Rescan Library
-          </button>
-        </div>
-      </div>
-
-      <div className="card">
-        <h2 className="section-title">Search Albums</h2>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={handleSearchChange}
-          className="search-input"
-          placeholder="Search by album title or artist..."
-        />
-        {searchQuery.trim() !== "" && (
-          <div className="album-grid">
-            {searchResults.length > 0 ? (
-              searchResults.map((album) => (
-                <div
-                  key={album.id}
-                  className="album-card"
-                  onClick={() => handleAlbumClick(album)}
-                >
-                  <img
-                    src={
-                      album.cover_art_base64
-                        ? `data:image/jpeg;base64,${album.cover_art_base64}`
-                        : `https://placehold.co/200x200/4A5568/CBD5E0?text=No+Cover`
-                    }
-                    alt={album.title}
-                    className="album-cover"
-                  />
-                  <div className="album-info">
-                    <h3>{album.title}</h3>
-                    <div>
-                      <p>{album.artist}</p>
-                      <p className="album-year">{album.year}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="empty-message">No albums found.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        {selectedAlbum ? (
-          <>
-            <button onClick={handleBackToAlbums} className="btn btn-back">
-              ← Back to Albums
-            </button>
-            <div className="album-header">
-              <img
-                src={
-                  selectedAlbum.cover_art_base64
-                    ? `data:image/jpeg;base64,${selectedAlbum.cover_art_base64}`
-                    : `https://placehold.co/150x150/4A5568/CBD5E0?text=No+Cover`
-                }
-                alt={selectedAlbum.title}
-                className="album-detail-cover"
-              />
-              <div className="album-header-details">
-                <h2>{selectedAlbum.title}</h2>
-                <div>
-                  <p>{selectedAlbum.artist}</p>
-                  <p className="more">
-                    <p> {selectedAlbum.year}</p>
-                    <p>{selectedAlbum.song_count} songs</p>
-                    <p>{(selectedAlbum.total_duration / 60).toFixed(1)} min</p>
-                  </p>
-                </div>
-              </div>
-            </div>
-            <h3 className="section-title">Songs</h3>
-            <div className="song-list">
-              {albumSongs.length > 0 ? (
-                albumSongs.map((song, index) => (
-                  <div key={song.id || index} className="song-item">
-                    <span className="song-index">
-                      {song.track_number || index + 1}.
-                    </span>
-                    <div className="song-info">
-                      <div>
-                        <p className="song-title">{song.title}</p>
-                        <p className="song-artist">{song.artist}</p>
-                      </div>
-                    </div>
-                    <span className="song-duration">
-                      {Math.floor(song.duration / 60)}:
-                      {Math.floor(song.duration % 60)
-                        .toString()
-                        .padStart(2, "0")}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-message">No songs found for this album.</p>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="section-title">All Albums</h2>
-            {albums.length > 0 ? (
-              <div className="album-grid">
-                {albums.map((album) => (
-                  <div
-                    key={album.id}
-                    className="album-card"
-                    onClick={() => handleAlbumClick(album)}
-                  >
-                    <img
-                      src={
-                        album.cover_art_base64
-                          ? `data:image/jpeg;base64,${album.cover_art_base64}`
-                          : `https://placehold.co/200x200/4A5568/CBD5E0?text=No+Cover`
-                      }
-                      alt={album.title}
-                      className="album-cover"
-                    />
-                    <div className="album-info">
-                      <h3>{album.title}</h3>
-                      <div>
-                        <p>{album.artist}</p>
-                        <p className="album-year">{album.year}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-message">
-                No albums found. Please select a music folder and scan your
-                library.
-              </p>
-            )}
-          </>
-        )}
-      </div>
+          {selectedAlbum ? (
+            <AlbumView 
+              selectedAlbum={selectedAlbum} 
+              albumSongs={albumSongs} 
+              onBack={handleBackToAlbums} 
+            />
+          ) : (
+            <MusicLibrary 
+              albums={albums} 
+              onAlbumClick={handleAlbumClick} 
+              searchQuery={searchQuery}
+              onSearchChange={handleSearchChange}
+              searchResults={searchResults}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

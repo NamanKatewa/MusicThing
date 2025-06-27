@@ -3,6 +3,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+
 #[derive(Serialize, Clone, Debug)]
 pub struct SongInfo {
     pub id: Option<i64>,
@@ -53,7 +54,6 @@ pub struct Album {
     pub folder_path: String,
 }
 
-#[derive(Clone)]
 pub struct AppState {
     pub db_pool: SqlitePool,
     pub is_scanning: Arc<RwLock<bool>>,

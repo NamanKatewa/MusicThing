@@ -226,7 +226,7 @@ pub async fn scan_music_folder(
 
             sqlx::query(
                 r#"
-                INSERT INTO songs (
+                INSERT OR REPLACE INTO songs (
                     album_id, title, artist, album, genre, duration, path, 
                     lyrics_path, album_artist, year, label, track_number, file_modified_time
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

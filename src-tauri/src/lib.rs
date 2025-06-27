@@ -52,6 +52,7 @@ pub fn run() {
                 }
 
                 let db_pool = initialize_database(&db_path).await?;
+
                 let app_state = AppState {
                     db_pool,
                     is_scanning: Arc::new(RwLock::new(false)),
@@ -59,6 +60,7 @@ pub fn run() {
                 };
 
                 app.manage(store);
+
                 app.manage(app_state);
 
                 Ok(())
@@ -86,7 +88,7 @@ pub fn run() {
 async fn get_music_folder_path(
     settings_store: State<'_, Store<tauri::Wry>>,
 ) -> Result<Option<String>, String> {
-    let value = settings_store.inner().get("music_folder_path".to_string());
+    let value = settings_store.get("music_folder_path".to_string());
     Ok(value.and_then(|v| v.as_str().map(|s| s.to_string())))
 }
 
@@ -95,12 +97,12 @@ async fn set_music_folder_path(
     path: String,
     settings_store: State<'_, Store<tauri::Wry>>,
 ) -> Result<(), String> {
-    settings_store.inner().set(
+    settings_store.set(
         "music_folder_path".to_string(),
         serde_json::Value::String(path),
     );
 
-    settings_store.inner().save().map_err(|e| e.to_string())?;
+    settings_store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -248,11 +250,11 @@ async fn get_scan_status(app_state: State<'_, AppState>) -> Result<(bool, f32), 
 #[tauri::command]
 async fn rescan_library(
     app_state: State<'_, AppState>,
-    settings_store: State<'_, Store<tauri::Wry>>,
     app_handle: AppHandle,
+    settings_store: State<'_, Store<tauri::Wry>>,
 ) -> Result<(), String> {
     // Get the saved folder path
-    let folder_path = match settings_store.inner().get("music_folder_path".to_string()) {
+    let folder_path = match settings_store.get("music_folder_path".to_string()) {
         Some(value) => value.as_str().map(|s| s.to_string()),
         None => None,
     };
