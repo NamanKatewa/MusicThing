@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-
 default-run = "musicthing"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -30,3 +29,7 @@ walkdir = "2.5.0"
 base64 = "0.22.1"
 lofty = "0.22.4"
 tauri-plugin-dialog = "2"
+tauri-plugin-store = "2"
+# Fixed SQLx with required features for SQLite
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "chrono", "migrate"] }
+tokio = { version = "1.45.1", features = ["full"] }

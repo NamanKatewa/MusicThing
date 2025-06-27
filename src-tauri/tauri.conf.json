@@ -31,5 +31,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "store": null,
+    "dialog": null,
+    "opener": null
   }
 }
